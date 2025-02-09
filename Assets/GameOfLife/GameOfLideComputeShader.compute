@@ -1,0 +1,53 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWStructuredBuffer<int> cells;
+RWStructuredBuffer<int> cellsNext;
+
+int width;
+int height;
+int depth;
+
+[numthreads(5,5,5)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    int x = id.x;
+    int y = id.y;
+    int z = id.z;
+
+    if (x >= width || y >= height || z >= depth) return;
+    
+    int index = x + (y * width) + (z * width * height);
+    int cell = cells[index];
+
+    int neighbors = 0;
+
+    for (int i = -1; i <= 1; i++)
+    {
+        for (int j = -1; j <= 1; j++)
+        {
+            for (int k = -1; k <= 1; k++)
+            {
+                if (i == 0 && j == 0 && k== 0) continue;
+            
+                int nx = x + i;
+                int ny = y + j;
+                int nz = z + k;
+
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height && nz >= 0 && nz < depth)
+                {
+                    int neighborIndex = nx + (ny * width) + (nz * width * height);
+                    neighbors += cells[neighborIndex];
+                }
+            }
+        }
+    }
+
+    int newCell = cell;
+    if (neighbors < 13) newCell = 0;
+    else if (neighbors >= 14 && neighbors <= 19) newCell = 1;
+
+    cellsNext[index] = newCell;
+}
