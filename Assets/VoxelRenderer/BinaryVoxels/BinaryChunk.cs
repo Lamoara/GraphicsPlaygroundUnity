@@ -10,11 +10,18 @@ using UnityEngine;
 
 public class BinaryChunk : MonoBehaviour
 {
+    delegate (Vector3[], Vector3[]) CreateOrientatedVertices(Vector3 origin, Vector3 end);
+
+    [SerializeField] ComputeShader faceCullingShader;
+
+
+
+    ComputeBuffer frontFacesBuffer, backFacesBuffer, leftFacesBuffer, rightFacesBuffer, upFacesBuffer, downFacesBuffer, voxelMapBuffer;
+
     int[] voxelMap;
     int size;
 
     Mesh mesh;
-    [SerializeField] Material mat;
 
     void Start()
     {
@@ -22,12 +29,59 @@ public class BinaryChunk : MonoBehaviour
         InitRandomVoxels();
         InitMesh();
         CreateMesh();
+        Render();
+        
+    }
 
+    void Render()
+    {
         List<Vector3> totalVertices = new List<Vector3>(), totalNormals = new List<Vector3>();
         Vector3[] vertices, normals;
         int[] triangles;
 
-        (vertices, normals) = CreateVertices(voxelMap);
+        int[] frontFaces = new int[size * size];
+        int[] backFaces = new int[size * size];
+        int[] leftFaces = new int[size * size];
+        int[] rightFaces = new int[size * size];
+        int[] upFaces = new int[size * size];
+        int[] downFaces = new int[size * size];
+
+        int bufferSize = size * size;
+
+        frontFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
+        backFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
+        leftFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
+        rightFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
+        upFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
+        downFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
+        voxelMapBuffer = new ComputeBuffer(bufferSize, sizeof(int));
+
+        int faceCullingShaderKernel = faceCullingShader.FindKernel("CSMain");
+
+        faceCullingShader.SetInt("size", size);
+
+        int threadGroupsX = Mathf.CeilToInt(size / 8.0f);
+        int threadGroupsY = 1;
+        int threadGroupsZ = Mathf.CeilToInt(size / 8.0f);
+
+        faceCullingShader.Dispatch(faceCullingShaderKernel, threadGroupsX, threadGroupsY, threadGroupsZ);
+
+        frontFacesBuffer.GetData(frontFaces);
+        backFacesBuffer.GetData(backFaces);
+        leftFacesBuffer.GetData(leftFaces);
+        rightFacesBuffer.GetData(rightFaces);
+        upFacesBuffer.GetData(upFaces);
+        downFacesBuffer.GetData(downFaces);
+
+        foreach (int e in frontFaces)
+            print(e);
+    
+
+        (vertices, normals) = CreateVertices(frontFaces, CreateFrontVertices);
+        totalVertices.AddRange(vertices);
+        totalNormals.AddRange(normals);
+
+        (vertices, normals) = CreateVertices(leftFaces, CreateSideVertices);
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
@@ -44,6 +98,7 @@ public class BinaryChunk : MonoBehaviour
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
     }
+
     void Init()
     {
         size = sizeof(int) * 8;
@@ -59,16 +114,18 @@ public class BinaryChunk : MonoBehaviour
     void InitMesh()
     {
         mesh = new Mesh();
-        GetComponent<MeshRenderer>().material = mat;
         GetComponent<MeshFilter>().mesh = mesh;
     }
 
-    (Vector3[], Vector3[]) CreateVertices(int[] faces)
+    (Vector3[], Vector3[]) CreateVertices(int[] faces, CreateOrientatedVertices vertexFunc)
     {
         List<Vector3> vertices = new List<Vector3>();
         List<Vector3> normals = new List<Vector3>();
+        Vector3 origin, end;
+        Vector3[] generatedVertices, generatedNormals;
 
         int[] meshed = new int[size * size];
+
         for (int z = 0; z < size; z++)
         {
             for (int x = 0; x < size - 1; x++)
@@ -97,7 +154,7 @@ public class BinaryChunk : MonoBehaviour
                     if (mask == 0) 
                         break;
 
-                    int width = 1;
+                    int width = 0;
                     while (x + width < size && (meshed[z * size + x + width] & mask) == 0 && (faces[z * size + x + width] & mask) == mask)
                     {
                         meshed[z * size + x + width] |= mask;   
@@ -105,13 +162,13 @@ public class BinaryChunk : MonoBehaviour
                     }
                     meshed[z * size + x] |= mask;
 
-                    vertices.Add(new Vector3(x, y - height, z));
-                    vertices.Add(new Vector3(x, y, z));
-                    vertices.Add(new Vector3(x + width, y, z));
-                    vertices.Add(new Vector3(x + width, y - height, z));
+                    origin = new Vector3(x, y - height, z);
+                    end = new Vector3(x + width, y, z);
 
-                    for (int i = 0; i < 4; i++)
-                        normals.Add(Vector3.back);   
+                    (generatedVertices, generatedNormals) = vertexFunc(origin, end);
+
+                    vertices.AddRange(generatedVertices);
+                    normals.AddRange(generatedNormals);
                 }
             }
         }
@@ -122,7 +179,7 @@ public class BinaryChunk : MonoBehaviour
     int[] CreateTriangles(Vector3[] vertices)
     {
         List<int> triangles = new List<int>();
-        for (int i= 0; i < vertices.Length/4; i += 4)
+        for (int i= 0; i < vertices.Length; i += 4)
         {
             triangles.Add(i);
             triangles.Add(i + 1);
@@ -135,6 +192,39 @@ public class BinaryChunk : MonoBehaviour
         return triangles.ToArray<int>();
     }
 
+    (Vector3[], Vector3[]) CreateFrontVertices(Vector3 origin, Vector3 end)
+    {
+        Vector3[] vertices = new Vector3[4];
+        Vector3[] normals = new Vector3[4];
+
+        vertices[0] = new Vector3(origin.x, origin.y, origin.z);
+        vertices[1] = new Vector3(origin.x, end.y, origin.z);
+        vertices[2] = new Vector3(end.x, end.y, origin.z);
+        vertices[3] = new Vector3(end.x, origin.y, origin.z);
+
+        for (int i = 0; i < 4; i++)
+            normals[i] = Vector3.back;   
+
+        return (vertices, normals);
+    }
+
+    (Vector3[], Vector3[]) CreateSideVertices(Vector3 origin, Vector3 end)
+    {
+        Vector3[] vertices = new Vector3[4];
+        Vector3[] normals = new Vector3[4];
+
+        vertices[0] = new Vector3(origin.z, origin.y, origin.x); 
+        vertices[1] = new Vector3(origin.z, end.y, origin.x);
+        vertices[2] = new Vector3(end.z, end.y, end.x);
+        vertices[3] = new Vector3(end.z, origin.y, end.x);
+
+        // Asignar la normal para cada vértice
+        for (int i = 0; i < 4; i++)
+            normals[i] = Vector3.right;
+
+        return (vertices, normals);
+    }
+
     void CreateMesh()
     {
         int[][] faces = new int[6][];
@@ -143,8 +233,21 @@ public class BinaryChunk : MonoBehaviour
         {
             faces[i] = new int[size];
         }
+    }
 
-        
+    void OnDestroy()
+    {
+        DisposeBuffers();
+    }
 
+    void DisposeBuffers()
+    {
+        frontFacesBuffer?.Release();
+        backFacesBuffer?.Release();
+        leftFacesBuffer?.Release();
+        rightFacesBuffer?.Release();
+        upFacesBuffer?.Release();
+        downFacesBuffer?.Release();
+        voxelMapBuffer?.Release();
     }
 }

@@ -3,12 +3,37 @@
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
-RWTexture2D<float4> Result;
+StructuredBuffer<int> voxelMap;
+RWStructuredBuffer<int> frontFaces, backFaces, leftFaces, rightFaces, upFaces, downFaces;
 
-[numthreads(8,8,1)]
+int size;
+
+[numthreads(8,1,8)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-    // TODO: insert actual code here!
+    int x = id.x;
+    int z = id.z;
 
-    Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+    if (x >= size || z >= size)
+        return;
+
+    int index = x + z * size;
+
+    int column = voxelMap[index];
+
+    if (z > 0)
+        frontFaces[index] = ~(column & voxelMap[index - size]) & column;
+
+    if (z < size)
+        backFaces[index] = ~(column & voxelMap[index + size]) & column;
+
+    if (x > 0)
+        leftFaces[index] = ~(column & voxelMap[index - 1]) & column;
+
+    if (x < size)
+        rightFaces[index] = ~(column & voxelMap[index + 1]) & column;
+
+    upFaces[index] = (column << 1) | 1;
+
+    downFaces[index] = (column >> 1) | 1;
 }
