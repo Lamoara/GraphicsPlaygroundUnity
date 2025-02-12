@@ -13,9 +13,7 @@ public class BinaryChunk : MonoBehaviour
     delegate (Vector3[], Vector3[]) CreateOrientatedVertices(Vector3 origin, Vector3 end);
 
     [SerializeField] ComputeShader faceCullingShader;
-
-
-
+    
     ComputeBuffer frontFacesBuffer, backFacesBuffer, leftFacesBuffer, rightFacesBuffer, upFacesBuffer, downFacesBuffer, voxelMapBuffer;
 
     int[] voxelMap;
@@ -39,14 +37,16 @@ public class BinaryChunk : MonoBehaviour
         Vector3[] vertices, normals;
         int[] triangles;
 
-        int[] frontFaces = new int[size * size];
-        int[] backFaces = new int[size * size];
-        int[] leftFaces = new int[size * size];
-        int[] rightFaces = new int[size * size];
-        int[] upFaces = new int[size * size];
-        int[] downFaces = new int[size * size];
+        int faceCullingShaderKernel = faceCullingShader.FindKernel("CSMain");
 
         int bufferSize = size * size;
+
+        int[] frontFaces = new int[bufferSize];
+        int[] backFaces = new int[bufferSize];
+        int[] leftFaces = new int[bufferSize];
+        int[] rightFaces = new int[bufferSize];
+        int[] upFaces = new int[bufferSize];
+        int[] downFaces = new int[bufferSize];
 
         frontFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
         backFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
@@ -56,8 +56,21 @@ public class BinaryChunk : MonoBehaviour
         downFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
         voxelMapBuffer = new ComputeBuffer(bufferSize, sizeof(int));
 
-        int faceCullingShaderKernel = faceCullingShader.FindKernel("CSMain");
+        frontFacesBuffer.SetData(frontFaces);
+        backFacesBuffer.SetData(backFaces);
+        leftFacesBuffer.SetData(leftFaces);
+        rightFacesBuffer.SetData(rightFaces);
+        upFacesBuffer.SetData(upFaces);
+        downFacesBuffer.SetData(downFaces);
+        voxelMapBuffer.SetData(voxelMap);
 
+        faceCullingShader.SetBuffer(0, "frontFaces", frontFacesBuffer);
+        faceCullingShader.SetBuffer(0, "backFaces", backFacesBuffer);
+        faceCullingShader.SetBuffer(0, "leftFaces", leftFacesBuffer);
+        faceCullingShader.SetBuffer(0, "rightFaces", rightFacesBuffer);
+        faceCullingShader.SetBuffer(0, "upFaces", upFacesBuffer);
+        faceCullingShader.SetBuffer(0, "downFaces", downFacesBuffer);
+        faceCullingShader.SetBuffer(0, "voxelMap", voxelMapBuffer);
         faceCullingShader.SetInt("size", size);
 
         int threadGroupsX = Mathf.CeilToInt(size / 8.0f);
@@ -77,11 +90,11 @@ public class BinaryChunk : MonoBehaviour
             print(e);
     
 
-        (vertices, normals) = CreateVertices(frontFaces, CreateFrontVertices);
+        (vertices, normals) = CreateVertices(backFaces, CreateBackVertices);
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
-        (vertices, normals) = CreateVertices(leftFaces, CreateSideVertices);
+        (vertices, normals) = CreateVertices(rightFaces, CreateRightSideVertices);
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
@@ -108,7 +121,7 @@ public class BinaryChunk : MonoBehaviour
     void InitRandomVoxels()
     {
         for (int i= 0; i < voxelMap.Length; i++)
-            voxelMap[i] = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
+            voxelMap[i] = 0 + i/size;//UnityEngine.Random.Range(int.MinValue, int.MaxValue);
     }
 
     void InitMesh()
@@ -192,7 +205,7 @@ public class BinaryChunk : MonoBehaviour
         return triangles.ToArray<int>();
     }
 
-    (Vector3[], Vector3[]) CreateFrontVertices(Vector3 origin, Vector3 end)
+    (Vector3[], Vector3[]) CreateBackVertices(Vector3 origin, Vector3 end)
     {
         Vector3[] vertices = new Vector3[4];
         Vector3[] normals = new Vector3[4];
@@ -208,15 +221,15 @@ public class BinaryChunk : MonoBehaviour
         return (vertices, normals);
     }
 
-    (Vector3[], Vector3[]) CreateSideVertices(Vector3 origin, Vector3 end)
+    (Vector3[], Vector3[]) CreateRightSideVertices(Vector3 origin, Vector3 end)
     {
         Vector3[] vertices = new Vector3[4];
         Vector3[] normals = new Vector3[4];
 
-        vertices[0] = new Vector3(origin.z, origin.y, origin.x); 
-        vertices[1] = new Vector3(origin.z, end.y, origin.x);
-        vertices[2] = new Vector3(end.z, end.y, end.x);
-        vertices[3] = new Vector3(end.z, origin.y, end.x);
+        vertices[0] = new Vector3(origin.z + 1, origin.y, origin.x); 
+        vertices[1] = new Vector3(origin.z + 1, end.y, origin.x);
+        vertices[2] = new Vector3(end.z + 1, end.y, end.x);
+        vertices[3] = new Vector3(end.z + 1, origin.y, end.x);
 
         // Asignar la normal para cada vértice
         for (int i = 0; i < 4; i++)

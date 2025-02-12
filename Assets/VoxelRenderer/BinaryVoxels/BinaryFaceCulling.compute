@@ -22,16 +22,24 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     int column = voxelMap[index];
 
     if (z > 0)
-        frontFaces[index] = ~(column & voxelMap[index - size]) & column;
+        backFaces[index] = ~(column & voxelMap[index - size]) & column;
+    else
+        backFaces[index] = column;
 
     if (z < size)
-        backFaces[index] = ~(column & voxelMap[index + size]) & column;
+        frontFaces[index] = ~(column & voxelMap[index + size]) & column;
+    else   
+        frontFaces[index] = column;
 
     if (x > 0)
         leftFaces[index] = ~(column & voxelMap[index - 1]) & column;
+    else
+        leftFaces[index] = column;
 
     if (x < size)
         rightFaces[index] = ~(column & voxelMap[index + 1]) & column;
+    else
+        rightFaces[index] = column;
 
     upFaces[index] = (column << 1) | 1;
 
