@@ -3,7 +3,7 @@
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
-StructuredBuffer<int> voxelMap;
+StructuredBuffer<int> voxelMap, voxelMapRotated;
 RWStructuredBuffer<int> frontFaces, backFaces, leftFaces, rightFaces, upFaces, downFaces;
 
 int size;
@@ -39,8 +39,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     if (x < size - 1)
         rightFaces[rotatedIndex] = ~(column & voxelMap[index + 1]) & column;
 
-
-    upFaces[index] = (column << 1) | 1;
-
-    downFaces[index] = (column >> 1) | 1;
+    //upFaces[index] = voxelMapRotated[index];
+    //downFaces[index] = voxelMapRotated[index];
+    
 }

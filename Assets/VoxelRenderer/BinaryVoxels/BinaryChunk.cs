@@ -9,9 +9,9 @@ public class BinaryChunk : MonoBehaviour
 
     [SerializeField] ComputeShader faceCullingShader;
     
-    ComputeBuffer frontFacesBuffer, backFacesBuffer, leftFacesBuffer, rightFacesBuffer, upFacesBuffer, downFacesBuffer, voxelMapBuffer;
+    ComputeBuffer frontFacesBuffer, backFacesBuffer, leftFacesBuffer, rightFacesBuffer, upFacesBuffer, downFacesBuffer, voxelMapBuffer, voxelMapRotatedBuffer;
 
-    int[] voxelMap;
+    int[] voxelMap, voxelMapRotated;
     int size;
 
     Mesh mesh;
@@ -34,9 +34,6 @@ public class BinaryChunk : MonoBehaviour
 
         int bufferSize = size * size;
 
-        totalVertices.Capacity = bufferSize * 4;
-        totalNormals.Capacity = bufferSize * 4;
-
         int faceCullingShaderKernel = faceCullingShader.FindKernel("CSMain");
 
         int[] frontFaces = new int[bufferSize];
@@ -45,6 +42,7 @@ public class BinaryChunk : MonoBehaviour
         int[] rightFaces = new int[bufferSize];
         int[] upFaces = new int[bufferSize];
         int[] downFaces = new int[bufferSize];
+        voxelMapRotated = RotateBits(voxelMap, size);
 
         frontFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
         backFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
@@ -53,6 +51,7 @@ public class BinaryChunk : MonoBehaviour
         upFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
         downFacesBuffer = new ComputeBuffer(bufferSize, sizeof(int));
         voxelMapBuffer = new ComputeBuffer(bufferSize, sizeof(int));
+        voxelMapRotatedBuffer = new ComputeBuffer(bufferSize, sizeof(int));
 
         frontFacesBuffer.SetData(frontFaces);
         backFacesBuffer.SetData(backFaces);
@@ -61,6 +60,7 @@ public class BinaryChunk : MonoBehaviour
         upFacesBuffer.SetData(upFaces);
         downFacesBuffer.SetData(downFaces);
         voxelMapBuffer.SetData(voxelMap);
+        voxelMapRotatedBuffer.SetData(voxelMapRotated);
 
         faceCullingShader.SetBuffer(0, "frontFaces", frontFacesBuffer);
         faceCullingShader.SetBuffer(0, "backFaces", backFacesBuffer);
@@ -69,6 +69,7 @@ public class BinaryChunk : MonoBehaviour
         faceCullingShader.SetBuffer(0, "upFaces", upFacesBuffer);
         faceCullingShader.SetBuffer(0, "downFaces", downFacesBuffer);
         faceCullingShader.SetBuffer(0, "voxelMap", voxelMapBuffer);
+        faceCullingShader.SetBuffer(0, "voxelMapRotated", voxelMapRotatedBuffer);
         faceCullingShader.SetInt("size", size);
 
         int threadGroupsX = Mathf.CeilToInt(size / 8.0f);
@@ -100,6 +101,10 @@ public class BinaryChunk : MonoBehaviour
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
+        (vertices, normals) = CreateVertices(upFaces, CreateUpSideVertices);
+        totalVertices.AddRange(vertices);
+        totalNormals.AddRange(normals);
+
         vertices = totalVertices.ToArray();
         normals = totalNormals.ToArray();
 
@@ -115,6 +120,26 @@ public class BinaryChunk : MonoBehaviour
         mesh.RecalculateBounds();
     }
 
+    int[] RotateBits(int[] input, int size)
+    {
+        int[] output = new int[size * size];
+
+        for (int x = 0; x < size; x++)
+        {
+            for (int z = 0; z < size; z++)
+            {
+                int index = x + z * size;
+                for (int y = 0; y < size; y++)
+                {
+                    int bit = (input[index] >> y) & 1;
+                    output[x + y * size] |= bit << z;
+                }
+            }
+        }
+
+        return output;
+}
+
     void Init()
     {
         size = sizeof(int) * 8;
@@ -124,7 +149,7 @@ public class BinaryChunk : MonoBehaviour
     void InitRandomVoxels()
     {
         for (int i= 0; i < voxelMap.Length; i++)
-            voxelMap[i] = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
+            voxelMap[i] = int.MaxValue;//UnityEngine.Random.Range(int.MinValue, int.MaxValue);
     }
 
     void InitMesh()
@@ -132,6 +157,16 @@ public class BinaryChunk : MonoBehaviour
         mesh = new Mesh();
         mesh.indexFormat = IndexFormat.UInt32;
         GetComponent<MeshFilter>().mesh = mesh;
+    }
+    
+    void CreateMesh()
+    {
+        int[][] faces = new int[6][];
+        //!TODO poner shader para generar caras visibles
+        for (int i = 0; i < faces.Length; i++)
+        {
+            faces[i] = new int[size];
+        }
     }
 
     (Vector3[], Vector3[]) CreateVertices(int[] faces, CreateOrientatedVertices vertexFunc)
@@ -196,7 +231,6 @@ public class BinaryChunk : MonoBehaviour
     int[] CreateTriangles(Vector3[] vertices)
     {
         List<int> triangles = new List<int>();
-        triangles.Capacity = size * size * size * 6 * 4;
         for (int i= 0; i < vertices.Length; i += 4)
         {
             triangles.Add(i);
@@ -276,14 +310,20 @@ public class BinaryChunk : MonoBehaviour
         return (vertices, normals);
     }
 
-    void CreateMesh()
+    (Vector3[], Vector3[]) CreateUpSideVertices(Vector3 origin, Vector3 end)
     {
-        int[][] faces = new int[6][];
-        //!TODO poner shader para generar caras visibles
-        for (int i = 0; i < faces.Length; i++)
-        {
-            faces[i] = new int[size];
-        }
+        Vector3[] vertices = new Vector3[4];
+        Vector3[] normals  = new Vector3[4];
+
+        vertices[0] = new Vector3(origin.y, origin.x, origin.z);
+        vertices[1] = new Vector3(origin.y, origin.x, end.z);
+        vertices[2] = new Vector3(end.y, origin.x, end.z);
+        vertices[3] = new Vector3(end.y, origin.x, origin.z);
+
+        for (int i = 0; i < 4; i++)
+            normals[i] = Vector3.up;
+
+        return (vertices, normals);
     }
 
     void OnDestroy()
@@ -300,5 +340,6 @@ public class BinaryChunk : MonoBehaviour
         upFacesBuffer?.Release();
         downFacesBuffer?.Release();
         voxelMapBuffer?.Release();
+        voxelMapRotatedBuffer?.Release();
     }
 }
