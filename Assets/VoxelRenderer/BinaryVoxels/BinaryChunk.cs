@@ -1,11 +1,5 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using NUnit.Framework.Internal.Execution;
-using Unity.VisualScripting;
-using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
 public class BinaryChunk : MonoBehaviour
@@ -86,10 +80,6 @@ public class BinaryChunk : MonoBehaviour
         upFacesBuffer.GetData(upFaces);
         downFacesBuffer.GetData(downFaces);
 
-        foreach (int e in frontFaces)
-            print(e);
-    
-
         (vertices, normals) = CreateVertices(backFaces, CreateBackVertices);
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
@@ -100,6 +90,7 @@ public class BinaryChunk : MonoBehaviour
 
         vertices = totalVertices.ToArray();
         normals = totalNormals.ToArray();
+
         triangles = CreateTriangles(vertices);
 
         mesh.Clear();
@@ -141,13 +132,13 @@ public class BinaryChunk : MonoBehaviour
 
         for (int z = 0; z < size; z++)
         {
-            for (int x = 0; x < size - 1; x++)
+            for (int x = 0; x < size; x++)
             {
                 int y = 0;
                 int faceValue = faces[z * size + x];
                 int meshedValue = meshed[z * size + x];
                 while (y < size)
-                    {
+                {
                     int mask = 0;
 
                     // Encuentra el primer bit en 1
@@ -165,7 +156,7 @@ public class BinaryChunk : MonoBehaviour
                     }
 
                     if (mask == 0) 
-                        break;
+                        continue;
 
                     int width = 0;
                     while (x + width < size && (meshed[z * size + x + width] & mask) == 0 && (faces[z * size + x + width] & mask) == mask)
