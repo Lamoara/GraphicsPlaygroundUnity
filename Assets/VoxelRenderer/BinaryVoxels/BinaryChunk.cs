@@ -122,6 +122,8 @@ public class BinaryChunk : MonoBehaviour
 
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
+
+        DisposeBuffers();
     }
 
     int[] RotateBits(int[] input, int size)
@@ -135,7 +137,8 @@ public class BinaryChunk : MonoBehaviour
                 for (int y = 0; y < size; y++)
                 {
                     int bit = (input[x + z * size] >> y) & 1;
-                    output[x + y * size] |= bit << z;
+                    if (bit != 0)
+                        output[x + y * size] |= bit << z;
                 }
             }
         }
@@ -147,6 +150,7 @@ public class BinaryChunk : MonoBehaviour
     {
         size = sizeof(int) * 8;
         voxelMap = new int[size * size];
+        voxelMapRotated = new int[size * size];
     }
 
     void InitRandomVoxels()
