@@ -18,6 +18,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         return;
 
     int index = x + z * size;
+    int invertedIndex = x + (size - z - 1) * size;
     int rotatedIndex = z + x * size;
 
     int column = voxelMap[index];
@@ -42,7 +43,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     if (x < size - 1)
         rightFaces[rotatedIndex] = ~(column & voxelMap[index + 1]) & column;
     
-    if (z < 0)
+    if (z > 0)
         downFaces[index] = ~(columnRotated & voxelMapRotated[index - size]) & columnRotated;
 
     if (z < size - 1)

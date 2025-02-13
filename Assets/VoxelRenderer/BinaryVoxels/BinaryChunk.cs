@@ -101,11 +101,11 @@ public class BinaryChunk : MonoBehaviour
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
-        (vertices, normals) = CreateVertices(downFaces, CreateDownVertices); //Add face culling in shader
+        (vertices, normals) = CreateVertices(downFaces, CreateDownVertices);
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
-        (vertices, normals) = CreateVertices(upFaces, CreateUpVertices); //Add face culling in shader
+        (vertices, normals) = CreateVertices(upFaces, CreateUpVertices);
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
