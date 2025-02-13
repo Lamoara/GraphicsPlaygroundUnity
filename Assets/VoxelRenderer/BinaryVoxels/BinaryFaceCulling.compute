@@ -42,4 +42,9 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     if (x < size - 1)
         rightFaces[rotatedIndex] = ~(column & voxelMap[index + 1]) & column;
     
+    if (z < 0)
+        downFaces[index] = ~(columnRotated & voxelMapRotated[index - size]) & columnRotated;
+
+    if (z < size - 1)
+        upFaces[index] = ~(columnRotated & voxelMapRotated[index + size]) & columnRotated;
 }
