@@ -101,7 +101,11 @@ public class BinaryChunk : MonoBehaviour
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
-        (vertices, normals) = CreateVertices(upFaces, CreateUpSideVertices);
+        (vertices, normals) = CreateVertices(downFaces, CreateDownVertices); //Add face culling in shader
+        totalVertices.AddRange(vertices);
+        totalNormals.AddRange(normals);
+
+        (vertices, normals) = CreateVertices(upFaces, CreateUpVertices); //Add face culling in shader
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
@@ -128,10 +132,9 @@ public class BinaryChunk : MonoBehaviour
         {
             for (int z = 0; z < size; z++)
             {
-                int index = x + z * size;
                 for (int y = 0; y < size; y++)
                 {
-                    int bit = (input[index] >> y) & 1;
+                    int bit = (input[x + z * size] >> y) & 1;
                     output[x + y * size] |= bit << z;
                 }
             }
@@ -149,7 +152,7 @@ public class BinaryChunk : MonoBehaviour
     void InitRandomVoxels()
     {
         for (int i= 0; i < voxelMap.Length; i++)
-            voxelMap[i] = int.MaxValue;//UnityEngine.Random.Range(int.MinValue, int.MaxValue);
+            voxelMap[i] = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
     }
 
     void InitMesh()
@@ -286,7 +289,6 @@ public class BinaryChunk : MonoBehaviour
         vertices[2] = new Vector3(end.z + 1, end.y, end.x);
         vertices[3] = new Vector3(end.z + 1, origin.y, end.x);
 
-        // Asignar la normal para cada vértice
         for (int i = 0; i < 4; i++)
             normals[i] = Vector3.right;
 
@@ -303,25 +305,40 @@ public class BinaryChunk : MonoBehaviour
         vertices[1] = new Vector3(end.z, end.y, end.x);
         vertices[0] = new Vector3(end.z, origin.y, end.x);
 
-        // Asignar la normal para cada vértice
         for (int i = 0; i < 4; i++)
             normals[i] = Vector3.right;
 
         return (vertices, normals);
     }
 
-    (Vector3[], Vector3[]) CreateUpSideVertices(Vector3 origin, Vector3 end)
+    (Vector3[], Vector3[]) CreateDownVertices(Vector3 origin, Vector3 end)
     {
         Vector3[] vertices = new Vector3[4];
-        Vector3[] normals  = new Vector3[4];
+        Vector3[] normals = new Vector3[4];
 
-        vertices[0] = new Vector3(origin.y, origin.x, origin.z);
-        vertices[1] = new Vector3(origin.y, origin.x, end.z);
-        vertices[2] = new Vector3(end.y, origin.x, end.z);
-        vertices[3] = new Vector3(end.y, origin.x, origin.z);
+        vertices[3] = new Vector3(origin.x, origin.z, origin.y);
+        vertices[2] = new Vector3(origin.x, origin.z, end.y);
+        vertices[1] = new Vector3(end.x, origin.z, end.y);
+        vertices[0] = new Vector3(end.x, origin.z, origin.y);
 
         for (int i = 0; i < 4; i++)
-            normals[i] = Vector3.up;
+            normals[i] = Vector3.down;   
+
+        return (vertices, normals);
+    }
+
+    (Vector3[], Vector3[]) CreateUpVertices(Vector3 origin, Vector3 end)
+    {
+        Vector3[] vertices = new Vector3[4];
+        Vector3[] normals = new Vector3[4];
+
+        vertices[0] = new Vector3(origin.x, origin.z + 1, origin.y);
+        vertices[1] = new Vector3(origin.x, origin.z + 1, end.y);
+        vertices[2] = new Vector3(end.x, origin.z + 1, end.y);
+        vertices[3] = new Vector3(end.x, origin.z + 1, origin.y);
+
+        for (int i = 0; i < 4; i++)
+            normals[i] = Vector3.up;   
 
         return (vertices, normals);
     }
