@@ -1,11 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 public class BinaryChunk : MonoBehaviour
 {
-    delegate (Vector3[], Vector3[]) CreateOrientatedVertices(Vector3 origin, Vector3 end);
+    delegate (List<Vector3>, List<Vector3>) CreateOrientatedVertices(Vector3 origin, Vector3 end);
 
     [SerializeField] ComputeShader faceCullingShader;
     
@@ -29,7 +30,7 @@ public class BinaryChunk : MonoBehaviour
     void Render()
     {
         List<Vector3> totalVertices = new List<Vector3>(), totalNormals = new List<Vector3>();
-        Vector3[] vertices, normals;
+        List<Vector3> vertices, normals;
         int[] triangles;
 
         int bufferSize = size * size;
@@ -109,42 +110,54 @@ public class BinaryChunk : MonoBehaviour
         totalVertices.AddRange(vertices);
         totalNormals.AddRange(normals);
 
-        vertices = totalVertices.ToArray();
-        normals = totalNormals.ToArray();
+        Vector3[] verticesArray = totalVertices.ToArray();
 
-        triangles = CreateTriangles(vertices);
+        triangles = CreateTriangles(verticesArray);
 
         mesh.Clear();
 
-        mesh.vertices = vertices;
+        mesh.vertices = verticesArray;
         mesh.triangles = triangles;
-        mesh.normals = normals;
+        mesh.normals = totalNormals.ToArray();
 
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
 
         DisposeBuffers();
+
+        frontFacesBuffer = null;
+        backFacesBuffer = null;
+        leftFacesBuffer = null;
+        rightFacesBuffer = null;
+        upFacesBuffer = null;
+        downFacesBuffer = null;
+        voxelMapBuffer = null;
+        voxelMapRotatedBuffer = null;
     }
 
     int[] RotateBits(int[] input, int size)
     {
         int[] output = new int[size * size];
-
-        for (int x = 0; x < size; x++)
+        Parallel.For(0, size, x =>
         {
             for (int z = 0; z < size; z++)
             {
+                int index = x + z * size;
+                int value = input[index];
+
                 for (int y = 0; y < size; y++)
                 {
-                    int bit = (input[x + z * size] >> y) & 1;
-                    if (bit != 0)
-                        output[x + y * size] |= bit << z;
+                    if (((value >> y) & 1) != 0)
+                    {
+                        int destIndex = x + y * size;
+                        output[destIndex] |= 1 << z;
+                    }
                 }
             }
-        }
-
+        });
         return output;
-}
+    }
+
 
     void Init()
     {
@@ -176,12 +189,12 @@ public class BinaryChunk : MonoBehaviour
         }
     }
 
-    (Vector3[], Vector3[]) CreateVertices(int[] faces, CreateOrientatedVertices vertexFunc)
+    (List<Vector3>, List<Vector3>) CreateVertices(int[] faces, CreateOrientatedVertices vertexFunc)
     {
         List<Vector3> vertices = new List<Vector3>();
         List<Vector3> normals = new List<Vector3>();
         Vector3 origin, end;
-        Vector3[] generatedVertices, generatedNormals;
+        List<Vector3> generatedVertices, generatedNormals;
 
         int[] meshed = new int[size * size];
 
@@ -211,7 +224,7 @@ public class BinaryChunk : MonoBehaviour
                     }
 
                     if (mask == 0) 
-                        continue;
+                        break;
 
                     int width = 0;
                     while (x + width < size && (meshed[z * size + x + width] & mask) == 0 && (faces[z * size + x + width] & mask) == mask)
@@ -232,117 +245,119 @@ public class BinaryChunk : MonoBehaviour
             }
         }
 
-        return (vertices.ToArray<Vector3>(), normals.ToArray<Vector3>());
+        return (vertices, normals);
     }
 
     int[] CreateTriangles(Vector3[] vertices)
     {
-        List<int> triangles = new List<int>();
+        int[] triangles = new int[(int) (vertices.Length * 1.5f)];
+        int j = 0;
         for (int i= 0; i < vertices.Length; i += 4)
         {
-            triangles.Add(i);
-            triangles.Add(i + 1);
-            triangles.Add(i + 2);
-            triangles.Add(i);
-            triangles.Add(i + 2);
-            triangles.Add(i + 3);
+            triangles[j] = i;
+            triangles[j + 1] = i + 1;
+            triangles[j + 2] = i + 2;
+            triangles[j + 3] = i;
+            triangles[j + 4] = i + 2;
+            triangles[j + 5] = i + 3;
+            j += 6;
         }
 
-        return triangles.ToArray<int>();
+        return triangles;
     }
 
-    (Vector3[], Vector3[]) CreateBackVertices(Vector3 origin, Vector3 end)
+    (List<Vector3>, List<Vector3>) CreateBackVertices(Vector3 origin, Vector3 end)
     {
-        Vector3[] vertices = new Vector3[4];
-        Vector3[] normals = new Vector3[4];
+        List<Vector3> vertices = new List<Vector3>();
+        List<Vector3> normals = new List<Vector3>();
 
-        vertices[0] = new Vector3(origin.x, origin.y, origin.z);
-        vertices[1] = new Vector3(origin.x, end.y, origin.z);
-        vertices[2] = new Vector3(end.x, end.y, origin.z);
-        vertices[3] = new Vector3(end.x, origin.y, origin.z);
+        vertices.Add(new Vector3(origin.x, origin.y, origin.z));
+        vertices.Add(new Vector3(origin.x, end.y, origin.z));
+        vertices.Add(new Vector3(end.x, end.y, origin.z));
+        vertices.Add(new Vector3(end.x, origin.y, origin.z));
 
         for (int i = 0; i < 4; i++)
-            normals[i] = Vector3.back;   
+            normals.Add(Vector3.back);   
 
         return (vertices, normals);
     }
 
-    (Vector3[], Vector3[]) CreateFrontVertices(Vector3 origin, Vector3 end)
+    (List<Vector3>, List<Vector3>) CreateFrontVertices(Vector3 origin, Vector3 end)
     {
-        Vector3[] vertices = new Vector3[4];
-        Vector3[] normals = new Vector3[4];
+        List<Vector3> vertices = new List<Vector3>();
+        List<Vector3> normals = new List<Vector3>();
 
-        vertices[3] = new Vector3(origin.x, origin.y, origin.z + 1);
-        vertices[2] = new Vector3(origin.x, end.y, origin.z + 1);
-        vertices[1] = new Vector3(end.x, end.y, origin.z + 1);
-        vertices[0] = new Vector3(end.x, origin.y, origin.z + 1);
+        vertices.Add(new Vector3(end.x, origin.y, origin.z + 1));
+        vertices.Add(new Vector3(end.x, end.y, origin.z + 1));
+        vertices.Add(new Vector3(origin.x, end.y, origin.z + 1));
+        vertices.Add(new Vector3(origin.x, origin.y, origin.z + 1));
 
         for (int i = 0; i < 4; i++)
-            normals[i] = Vector3.back;   
+            normals.Add(Vector3.back);   
 
         return (vertices, normals);
     }
 
-    (Vector3[], Vector3[]) CreateRightSideVertices(Vector3 origin, Vector3 end)
+    (List<Vector3>, List<Vector3>) CreateRightSideVertices(Vector3 origin, Vector3 end)
     {
-        Vector3[] vertices = new Vector3[4];
-        Vector3[] normals = new Vector3[4];
+        List<Vector3> vertices = new List<Vector3>();
+        List<Vector3> normals = new List<Vector3>();
 
-        vertices[0] = new Vector3(origin.z + 1, origin.y, origin.x); 
-        vertices[1] = new Vector3(origin.z + 1, end.y, origin.x);
-        vertices[2] = new Vector3(end.z + 1, end.y, end.x);
-        vertices[3] = new Vector3(end.z + 1, origin.y, end.x);
+        vertices.Add(new Vector3(origin.z + 1, origin.y, origin.x)); 
+        vertices.Add(new Vector3(origin.z + 1, end.y, origin.x));
+        vertices.Add(new Vector3(end.z + 1, end.y, end.x));
+        vertices.Add(new Vector3(end.z + 1, origin.y, end.x));
 
         for (int i = 0; i < 4; i++)
-            normals[i] = Vector3.right;
+            normals.Add(Vector3.right);
 
         return (vertices, normals);
     }
 
-    (Vector3[], Vector3[]) CreateLeftSideVertices(Vector3 origin, Vector3 end)
+    (List<Vector3>, List<Vector3>) CreateLeftSideVertices(Vector3 origin, Vector3 end)
     {
-        Vector3[] vertices = new Vector3[4];
-        Vector3[] normals = new Vector3[4];
+        List<Vector3> vertices = new List<Vector3>();
+        List<Vector3> normals = new List<Vector3>();
 
-        vertices[3] = new Vector3(origin.z, origin.y, origin.x); 
-        vertices[2] = new Vector3(origin.z, end.y, origin.x);
-        vertices[1] = new Vector3(end.z, end.y, end.x);
-        vertices[0] = new Vector3(end.z, origin.y, end.x);
+        vertices.Add(new Vector3(end.z, origin.y, end.x));
+        vertices.Add(new Vector3(end.z, end.y, end.x));
+        vertices.Add(new Vector3(origin.z, end.y, origin.x));
+        vertices.Add(new Vector3(origin.z, origin.y, origin.x)); 
 
         for (int i = 0; i < 4; i++)
-            normals[i] = Vector3.right;
+            normals.Add(Vector3.right);
 
         return (vertices, normals);
     }
 
-    (Vector3[], Vector3[]) CreateDownVertices(Vector3 origin, Vector3 end)
+    (List<Vector3>, List<Vector3>) CreateDownVertices(Vector3 origin, Vector3 end)
     {
-        Vector3[] vertices = new Vector3[4];
-        Vector3[] normals = new Vector3[4];
+        List<Vector3> vertices = new List<Vector3>();
+        List<Vector3> normals = new List<Vector3>();
 
-        vertices[3] = new Vector3(origin.x, origin.z, origin.y);
-        vertices[2] = new Vector3(origin.x, origin.z, end.y);
-        vertices[1] = new Vector3(end.x, origin.z, end.y);
-        vertices[0] = new Vector3(end.x, origin.z, origin.y);
+        vertices.Add(new Vector3(end.x, origin.z, origin.y));
+        vertices.Add(new Vector3(end.x, origin.z, end.y));
+        vertices.Add(new Vector3(origin.x, origin.z, end.y));
+        vertices.Add(new Vector3(origin.x, origin.z, origin.y));
 
         for (int i = 0; i < 4; i++)
-            normals[i] = Vector3.down;   
+            normals.Add(Vector3.down);   
 
         return (vertices, normals);
     }
 
-    (Vector3[], Vector3[]) CreateUpVertices(Vector3 origin, Vector3 end)
+    (List<Vector3>, List<Vector3>) CreateUpVertices(Vector3 origin, Vector3 end)
     {
-        Vector3[] vertices = new Vector3[4];
-        Vector3[] normals = new Vector3[4];
+        List<Vector3> vertices = new List<Vector3>();
+        List<Vector3> normals = new List<Vector3>();
 
-        vertices[0] = new Vector3(origin.x, origin.z + 1, origin.y);
-        vertices[1] = new Vector3(origin.x, origin.z + 1, end.y);
-        vertices[2] = new Vector3(end.x, origin.z + 1, end.y);
-        vertices[3] = new Vector3(end.x, origin.z + 1, origin.y);
+        vertices.Add(new Vector3(origin.x, origin.z + 1, origin.y));
+        vertices.Add(new Vector3(origin.x, origin.z + 1, end.y));
+        vertices.Add(new Vector3(end.x, origin.z + 1, end.y));
+        vertices.Add(new Vector3(end.x, origin.z + 1, origin.y));
 
         for (int i = 0; i < 4; i++)
-            normals[i] = Vector3.up;   
+            normals.Add(Vector3.up);   
 
         return (vertices, normals);
     }

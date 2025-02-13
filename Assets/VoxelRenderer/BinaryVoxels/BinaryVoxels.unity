@@ -422,7 +422,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ec93cd176e5d004ea4fc2e170ea2454, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  size: {x: 2, y: 2, z: 2}
+  size: {x: 6, y: 6, z: 6}
   chunkPrefab: {fileID: 549422288327130172, guid: 25258673d07eb984797de6f742303f43, type: 3}
 --- !u!4 &1029184596
 Transform:
